@@ -16,20 +16,24 @@ generations and python tiers.
 ## Quick start
 
 ```bash
-git clone <this-repo-url> lib_validation
-cd lib_validation
+git clone <this-repo-url> lib-validation
+cd lib-validation
 
 # Once per architecture (aarch64, x86_64), from a matching host:
 showVersions logstash stomp psutil python | grep -e version -e default -e testing \
     > raw_versions_aarch64.txt
 python3 parse_versions.py raw_versions_aarch64.txt > matrix_aarch64.tsv
 
+chmod +x run_validation.sh
 ./run_validation.sh matrix_aarch64.tsv aarch64
 python3 summarize_results.py results_aarch64.jsonl
 ```
 
 See below for the x86_64 pass, the `pilot-default`/`pilot-testing`
 cross-check, and what the output actually means.
+
+For reference: lxplus998 is a host with `aarch64` CPU, and lxplus952 is a host 
+with `x86_64` CPU.  
 
 ## Files
 
