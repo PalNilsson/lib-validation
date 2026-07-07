@@ -16,8 +16,8 @@ generations and python tiers.
 ## Quick start
 
 ```bash
-git clone <this-repo-url> lib-validation
-cd lib-validation
+git clone <this-repo-url> lib_validation
+cd lib_validation
 
 # Once per architecture (aarch64, x86_64), from a matching host:
 showVersions logstash stomp psutil python | grep -e version -e default -e testing \
@@ -31,9 +31,6 @@ python3 summarize_results.py results_aarch64.jsonl
 
 See below for the x86_64 pass, the `pilot-default`/`pilot-testing`
 cross-check, and what the output actually means.
-
-For reference: lxplus998 is a host with `aarch64` CPU, and lxplus952 is a host 
-with `x86_64` CPU.  
 
 ## Files
 
@@ -80,6 +77,7 @@ showVersions logstash stomp psutil python | grep -e version -e default -e testin
 python3 parse_versions.py raw_versions_aarch64.txt --table   # sanity check
 python3 parse_versions.py raw_versions_aarch64.txt > matrix_aarch64.tsv
 
+chmod +x run_validation.sh   # only needed once, e.g. after a fresh clone
 ./run_validation.sh matrix_aarch64.tsv aarch64          # all OSes in the matrix
 # or restrict explicitly:
 ./run_validation.sh matrix_aarch64.tsv aarch64 el9 centos8 el10
@@ -141,6 +139,81 @@ attempts (including pre-fix failures from earlier in a debugging session)
 don't linger in the report. Pass `--history` if you actually want to see
 every past attempt for comparison.
 
+## Manual interactive check inside a container
+
+Sometimes it's worth setting up a specific combination by hand at the
+`Apptainer>` prompt -- e.g. to run the pilot itself against a given
+library/python pairing and watch for exceptions, rather than just the
+smoke test. `lsetup` calls stack within a session (each one adds to the
+environment rather than replacing it), so you can build up exactly the
+combination you want:
+
+**el9**, using python 3.9 (the version confirmed to break the testing-tier
+libraries) against the testing-tier builds specifically:
+
+```bash
+setupATLAS -c el9
+
+showVersions python | grep -e version -e default -e testing
+lsetup "python 3.9.25-aarch64-el9"
+
+showVersions logstash | grep -e version -e default -e testing
+lsetup "logstash 4.1.0-aarch64-el9"
+
+showVersions psutil | grep -e version -e default -e testing
+lsetup "psutil 7.2.2-aarch64-el9"
+
+showVersions stomp | grep -e version -e default -e testing
+lsetup "stomp 9.0.0-aarch64-el9"
+```
+
+`lsetup "logstash 4.1.0-aarch64-el9"` is expected to refuse outright with
+`Error: Python 3.9 bindings are unavailable for this version` -- it fails
+at `lsetup` time, before any Python code runs. `psutil`/`stomp` will
+`lsetup` without complaint and only fail later, on actual `import` --
+which is the more interesting case to watch when running the pilot on top
+of this, since it's the pilot's own error handling around that `import`
+that's worth observing, not just the failure itself.
+
+**centos7**, where python 3.9 is the *only* option (see note below) and
+default/testing are identical, so there's no comparison to make:
+
+```bash
+setupATLAS -c centos7
+
+showVersions python | grep -e version -e default -e testing
+lsetup "python 3.9.22-x86_64-centos7"
+
+showVersions logstash | grep -e version -e default -e testing
+lsetup "logstash 2.3.0"
+
+showVersions stomp | grep -e version -e default -e testing
+lsetup "stomp 7.0.0-x86_64-centos7"
+
+showVersions psutil | grep -e version -e default -e testing
+lsetup "psutil 6.0.0-x86_64-centos7"
+```
+
+Swap `centos7` for `centos8`/`el9`/`el10` and use the matching version
+strings from each `showVersions` call for other OSes. Note that filtering
+`showVersions python` with `-e default -e testing` hides python 3.9
+entirely on centos8/el9 -- it's still there, just tagged `recommended`
+instead (`3.9.25-x86_64-centos8`, `3.9.25-x86_64-el9`); grep for
+`-e recommended` too, or use the version string directly, if you need it
+on those OSes. el10 is the one OS with no 3.9 build at all. What actually
+gates the observed failures isn't python 3.9's availability -- it's that
+Asoka never compiled the *library* bindings (logstash/stomp) against
+python 3.9 for el8 and newer, only for centos7's older generation.
+Also note centos7's `default-SL7` and `testing-SL7` tags point at the
+exact same build for all three libraries -- there's no distinct testing
+tier to compare there, unlike centos8/el9/el10.
+
+A quick sanity check before layering the pilot on top:
+
+```bash
+python3 -c "import logstash_async, stomp, psutil; print('all imported cleanly')"
+```
+
 ## Known limitations
 
 - Each (lib, tag) test pins its own matching interpreter first, resolved to
@@ -169,4 +242,3 @@ every past attempt for comparison.
   SL7-tagged build (currently just logstash's legacy 2.3.0) — psutil and
   stomp have no SL7 coverage at all in the parsed matrix, which is correct,
   not a parsing gap.
- 
