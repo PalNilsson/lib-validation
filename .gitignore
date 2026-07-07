@@ -1,0 +1,10 @@
+# Generated per-run artifacts -- these are outputs of running the tools in
+# this repo against a live ATLAS environment, not part of the tooling itself.
+raw_versions_*.txt
+matrix_*.tsv
+results_*.jsonl
+container_*.log
+
+# Python
+__pycache__/
+*.pyc
